@@ -46,7 +46,7 @@ public class Ts3EventListener implements TS3Listener {
 
                 case "!play", "!p" -> {
                     if (args.isEmpty()) {
-                        client.sendChannelMessage(channelId, "usage: !play <song or url>");
+                        client.sendChannelMessage(channelId, "Usage: **!play** *<song or URL>*");
                     } else {
                         playerCoordinatorService.handlePlay(client, e.getInvokerName(), args);
                     }
@@ -54,7 +54,7 @@ public class Ts3EventListener implements TS3Listener {
 
                 case "!next", "!n" -> {
                     if (args.isEmpty()) {
-                        client.sendChannelMessage(channelId, "usage: !next <song or url>");
+                        client.sendChannelMessage(channelId, "Usage: **!next** *<song or URL>*");
                     } else {
                         playerCoordinatorService.handleNext(client, e.getInvokerName(), args);
                     }
@@ -79,7 +79,7 @@ public class Ts3EventListener implements TS3Listener {
             log.warn("Failed handling message from {}", e.getInvokerName(), ex);
             try {
                 int channelId = client.getClientInfo(client.getClientId()).getChannelId();
-                client.sendChannelMessage(channelId, "error handling command");
+                client.sendChannelMessage(channelId, "⚠ Error handling command.");
             } catch (Exception ignored) {
             }
         }

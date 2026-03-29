@@ -32,7 +32,7 @@ public class PlayerCoordinatorService {
 
     public void handlePlay(LocalTeamspeakClientSocket client, String requestedBy, String query) throws Exception {
         int channelId = channelId(client);
-        client.sendChannelMessage(channelId, "resolving: " + query);
+        client.sendChannelMessage(channelId, "Resolving **" + query + "**…");
 
         ResolvedTrack resolved = mediaResolverService.resolve(query);
         Track track = toTrack(resolved, requestedBy);
@@ -42,12 +42,12 @@ public class PlayerCoordinatorService {
 
         if (wasIdle) {
             historyService.add(track);
-            client.sendChannelMessage(channelId, "now playing: " + track.getTitle());
+            client.sendChannelMessage(channelId, "▶ " + trackLink(track) + " — *requested by " + requestedBy + "*");
             playbackService.play(client, track, () -> onTrackFinished(client, track));
         } else {
             client.sendChannelMessage(
                     channelId,
-                    "queued: " + track.getTitle() + " (position " + queueService.getQueueSize() + ")"
+                    "Added to queue at **#" + queueService.getQueueSize() + "** — " + trackLink(track)
             );
         }
     }
@@ -55,7 +55,7 @@ public class PlayerCoordinatorService {
     /** Adds a song to the front of the queue so it plays next (or immediately if idle). */
     public void handleNext(LocalTeamspeakClientSocket client, String requestedBy, String query) throws Exception {
         int channelId = channelId(client);
-        client.sendChannelMessage(channelId, "resolving: " + query);
+        client.sendChannelMessage(channelId, "Resolving **" + query + "**…");
 
         ResolvedTrack resolved = mediaResolverService.resolve(query);
         Track track = toTrack(resolved, requestedBy);
@@ -65,10 +65,10 @@ public class PlayerCoordinatorService {
 
         if (wasIdle) {
             historyService.add(track);
-            client.sendChannelMessage(channelId, "now playing: " + track.getTitle());
+            client.sendChannelMessage(channelId, "▶ " + trackLink(track) + " — *requested by " + requestedBy + "*");
             playbackService.play(client, track, () -> onTrackFinished(client, track));
         } else {
-            client.sendChannelMessage(channelId, "queued next: " + track.getTitle());
+            client.sendChannelMessage(channelId, "Playing next — " + trackLink(track));
         }
     }
 
@@ -77,20 +77,19 @@ public class PlayerCoordinatorService {
         Track nowPlaying = queueService.getNowPlaying();
 
         if (nowPlaying == null) {
-            client.sendChannelMessage(channelId, "queue is empty");
+            client.sendChannelMessage(channelId, "*The queue is empty.*");
             return;
         }
 
-        StringBuilder response = new StringBuilder("now playing: ").append(nowPlaying.getTitle());
-        List<Track> items = queueService.getQueue();
+        StringBuilder response = new StringBuilder();
+        response.append("▶ ").append(trackLink(nowPlaying))
+                .append(" — *requested by ").append(nowPlaying.getRequestedBy()).append("*");
 
+        List<Track> items = queueService.getQueue();
         if (!items.isEmpty()) {
-            response.append(" | next: ");
+            response.append("\n**Up next:**");
             for (int i = 0; i < items.size(); i++) {
-                response.append(i + 1).append(". ").append(items.get(i).getTitle());
-                if (i < items.size() - 1) {
-                    response.append(" | ");
-                }
+                response.append("\n").append(i + 1).append(". ").append(trackLink(items.get(i)));
             }
         }
 
@@ -102,11 +101,11 @@ public class PlayerCoordinatorService {
         Track nowPlaying = queueService.getNowPlaying();
 
         if (nowPlaying == null) {
-            client.sendChannelMessage(channelId, "nothing is playing");
+            client.sendChannelMessage(channelId, "*Nothing is currently playing.*");
         } else {
             client.sendChannelMessage(
                     channelId,
-                    "now playing: " + nowPlaying.getTitle() + " (requested by " + nowPlaying.getRequestedBy() + ")"
+                    "▶ " + trackLink(nowPlaying) + " — *requested by " + nowPlaying.getRequestedBy() + "*"
             );
         }
     }
@@ -119,14 +118,14 @@ public class PlayerCoordinatorService {
     public void handleClear(LocalTeamspeakClientSocket client) throws Exception {
         int channelId = channelId(client);
         queueService.clearQueue();
-        client.sendChannelMessage(channelId, "queue cleared");
+        client.sendChannelMessage(channelId, "Queue cleared.");
     }
 
     public void handleStop(LocalTeamspeakClientSocket client) throws Exception {
         int channelId = channelId(client);
         playbackService.stop();
         queueService.stop();
-        client.sendChannelMessage(channelId, "playback stopped and queue cleared");
+        client.sendChannelMessage(channelId, "Playback stopped.");
     }
 
     // -------------------------------------------------------------------------
@@ -160,15 +159,15 @@ public class PlayerCoordinatorService {
         if (next == null) {
             next = resolveFromHistory();
             if (next == null) {
-                client.sendChannelMessage(channelId, "queue ended");
+                client.sendChannelMessage(channelId, "*Queue ended — no history to auto-play from.*");
                 return;
             }
             queueService.add(next);
-            client.sendChannelMessage(channelId, "auto-playing from history: " + next.getTitle());
+            client.sendChannelMessage(channelId, "🔀 " + trackLink(next) + " *(auto-play)*");
         } else {
             next = ensureResolved(next);
             queueService.updateNowPlaying(next);
-            client.sendChannelMessage(channelId, "now playing: " + next.getTitle());
+            client.sendChannelMessage(channelId, "▶ " + trackLink(next));
         }
 
         historyService.add(next);
@@ -227,5 +226,13 @@ public class PlayerCoordinatorService {
 
     private static int channelId(LocalTeamspeakClientSocket client) throws Exception {
         return client.getClientInfo(client.getClientId()).getChannelId();
+    }
+
+    /** Returns a markdown hyperlink if the track has a URL, otherwise plain bold title. */
+    private static String trackLink(Track track) {
+        if (track.getWebpageUrl() != null && !track.getWebpageUrl().isBlank()) {
+            return "[" + track.getTitle() + "](" + track.getWebpageUrl() + ")";
+        }
+        return "**" + track.getTitle() + "**";
     }
 }
