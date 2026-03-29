@@ -34,6 +34,7 @@ public class PlaybackService {
     private Thread pumpThread;
 
     private volatile boolean stopRequested = false;
+    private volatile boolean paused = false;
 
     public PlaybackService(Ts3OpusMicrophone microphone) {
         this.microphone = microphone;
@@ -104,8 +105,27 @@ public class PlaybackService {
         stop();
     }
 
+    public synchronized void pause() {
+        if (isPlaying() && !paused) {
+            paused = true;
+            log.info("Playback paused");
+        }
+    }
+
+    public synchronized void resume() {
+        if (paused) {
+            paused = false;
+            log.info("Playback resumed");
+        }
+    }
+
+    public boolean isPaused() {
+        return paused;
+    }
+
     public synchronized void stop() {
         stopRequested = true;
+        paused = false;
         microphone.clear();
 
         if (currentSession != null) {
@@ -154,6 +174,10 @@ public class PlaybackService {
                 byte[] opusBuffer = new byte[MAX_OPUS_PACKET_SIZE];
 
                 while (!stopRequested) {
+                    while (paused && !stopRequested) {
+                        Thread.sleep(50);
+                    }
+                    if (stopRequested) break;
                     readFully(pcmStream, pcmBytes, 0, pcmBytes.length);
                     littleEndianBytesToShorts(pcmBytes, pcmShorts);
 
