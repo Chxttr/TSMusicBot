@@ -1,0 +1,9 @@
+server:
+  port: 8080
+
+ts3:
+  host: ""
+  port: 9987
+  nickname: "Music"
+  server-password: ""
+  channel-name: ""
