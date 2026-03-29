@@ -16,18 +16,17 @@ public class Ts3EventListener implements TS3Listener {
 
     private static final String HELP_MESSAGE =
             "**Music Bot Commands**\n" +
-            "\u25B6 **!play** (!p) *<song or URL>* \u2014 play or queue a track\n" +
-            "\u23ED **!next** (!n) *<song or URL>* \u2014 queue a track to play next\n" +
-            "\u23E9 **!skip** (!s) \u2014 skip the current track\n" +
-            "\u23F8 **!pause** \u2014 pause playback\n" +
-            "\u25B6 **!resume** \u2014 resume playback\n" +
-            "\uD83D\uDCCB **!queue** (!q) \u2014 show the queue\n" +
-            "\uD83C\uDFB5 **!nowplaying** (!np) \u2014 show the current track\n" +
-            "\uD83D\uDD04 **!history** *[1-100]* \u2014 show recently played (default: 10)\n" +
-            "\uD83D\uDDD1 **!remove** (!rm) *<position or title>* \u2014 remove a track from the queue\n" +
-            "\uD83D\uDDD1 **!clear** (!c) \u2014 clear the upcoming queue\n" +
-            "\u23F9 **!stop** \u2014 stop playback and clear the queue\n" +
-            "\uD83E\uDD16 **!autodj** *[on|off]* \u2014 toggle AI-powered AutoDJ";
+            "▶ **!play** (!p) *<song or URL>* — play or queue a track\n" +
+            "⏭ **!next** (!n) *<song or URL>* — queue a track to play next\n" +
+            "⏩ **!skip** (!s) — skip the current track\n" +
+            "⏸ **!pause** — pause playback\n" +
+            "▶ **!resume** — resume playback\n" +
+            "📋 **!queue** (!q) — show the queue\n" +
+            "🎵 **!nowplaying** (!np) — show the current track\n" +
+            "🕐 **!history** *[1-100]* — show recently played (default: 10)\n" +
+            "🗑 **!remove** (!rm) *<position or title>* — remove a track from the queue\n" +
+            "🗑 **!clear** (!c) — clear the upcoming queue\n" +
+            "⏹ **!stop** — stop playback and clear the queue";
 
     private final LocalTeamspeakClientSocket client;
     private final PlayerCoordinatorService playerCoordinatorService;
@@ -131,7 +130,7 @@ public class Ts3EventListener implements TS3Listener {
             log.warn("Failed handling message from {}", e.getInvokerName(), ex);
             try {
                 int channelId = client.getClientInfo(client.getClientId()).getChannelId();
-                client.sendChannelMessage(channelId, "\u26A0 Error handling command.");
+                client.sendChannelMessage(channelId, "⚠ Error handling command.");
             } catch (Exception ignored) {
             }
         }
