@@ -1,5 +1,6 @@
 target/
 local-config/
 local-data/
+local-logs/
 *.log
 .env

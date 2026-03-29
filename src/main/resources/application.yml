@@ -2,8 +2,14 @@ server:
   port: 8080
 
 ts3:
-  host: ""
+  host: "109.129.79.120"
   port: 9987
-  nickname: "Music"
+  nickname: "MusicTest"
   server-password: ""
-  channel-name: ""
+  channel-name: "Music NO MIC ONLY MUSIC"
+
+autodj:
+  enabled: true
+  ollama-url: "http://192.168.128.10:30068"
+  model: "llama3.1:8b"
+  suggest-count: 7

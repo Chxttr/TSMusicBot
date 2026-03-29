@@ -88,6 +88,17 @@ public class Ts3EventListener implements TS3Listener {
                 return;
             }
 
+            if ("!autodj".equalsIgnoreCase(msg)) {
+                playerCoordinatorService.handleAutoDjToggle(client, null);
+                return;
+            }
+
+            if (msg.toLowerCase(Locale.ROOT).startsWith("!autodj ")) {
+                String args = msg.substring(8).trim();
+                playerCoordinatorService.handleAutoDjToggle(client, args);
+                return;
+            }
+
         } catch (Exception ex) {
             log.warn("Failed handling text message", ex);
 

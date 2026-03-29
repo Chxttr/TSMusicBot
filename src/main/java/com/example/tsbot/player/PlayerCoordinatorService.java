@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Service
 public class PlayerCoordinatorService {
 
@@ -13,15 +15,18 @@ public class PlayerCoordinatorService {
     private final QueueService queueService;
     private final PlaybackService playbackService;
     private final MediaResolverService mediaResolverService;
+    private final AutoDjService autoDjService;
 
     public PlayerCoordinatorService(
             QueueService queueService,
             PlaybackService playbackService,
-            MediaResolverService mediaResolverService
+            MediaResolverService mediaResolverService,
+            AutoDjService autoDjService
     ) {
         this.queueService = queueService;
         this.playbackService = playbackService;
         this.mediaResolverService = mediaResolverService;
+        this.autoDjService = autoDjService;
     }
 
     public void handlePlay(LocalTeamspeakClientSocket client, String requestedBy, String query) throws Exception {
@@ -43,6 +48,7 @@ public class PlayerCoordinatorService {
         queueService.add(track);
 
         if (wasIdle) {
+            autoDjService.recordPlay(track.getTitle());
             client.sendChannelMessage(channelId, "now playing: " + track.getTitle());
             playbackService.play(client, track, () -> onTrackFinished(client, track));
         } else {
@@ -101,8 +107,13 @@ public class PlayerCoordinatorService {
 
         Track next = queueService.skip();
         if (next == null) {
-            client.sendChannelMessage(channelId, "queue ended");
+            if (autoDjService.isEnabled()) {
+                triggerAutoDj(client, channelId);
+            } else {
+                client.sendChannelMessage(channelId, "queue ended");
+            }
         } else {
+            autoDjService.recordPlay(next.getTitle());
             client.sendChannelMessage(channelId, "skipped, now playing: " + next.getTitle());
             playbackService.play(client, next, () -> onTrackFinished(client, next));
         }
@@ -123,6 +134,28 @@ public class PlayerCoordinatorService {
         client.sendChannelMessage(channelId, "playback stopped and queue cleared");
     }
 
+    public void handleAutoDjToggle(LocalTeamspeakClientSocket client, String args) throws Exception {
+        int channelId = client.getClientInfo(client.getClientId()).getChannelId();
+
+        if (args == null || args.isBlank()) {
+            String status = autoDjService.isEnabled() ? "ON" : "OFF";
+            client.sendChannelMessage(channelId,
+                    "AutoDJ is " + status + " (model: " + autoDjService.getModel() + ")");
+            return;
+        }
+
+        String arg = args.trim().toLowerCase();
+        if ("on".equals(arg)) {
+            autoDjService.setEnabled(true);
+            client.sendChannelMessage(channelId, "AutoDJ enabled");
+        } else if ("off".equals(arg)) {
+            autoDjService.setEnabled(false);
+            client.sendChannelMessage(channelId, "AutoDJ disabled");
+        } else {
+            client.sendChannelMessage(channelId, "usage: !autodj [on|off]");
+        }
+    }
+
     private synchronized void onTrackFinished(LocalTeamspeakClientSocket client, Track finishedTrack) {
         try {
             Track current = queueService.getNowPlaying();
@@ -140,15 +173,97 @@ public class PlayerCoordinatorService {
             int channelId = client.getClientInfo(client.getClientId()).getChannelId();
 
             if (next == null) {
-                client.sendChannelMessage(channelId, "queue ended");
+                if (autoDjService.isEnabled()) {
+                    triggerAutoDj(client, channelId);
+                } else {
+                    client.sendChannelMessage(channelId, "queue ended");
+                }
                 return;
             }
 
+            autoDjService.recordPlay(next.getTitle());
             client.sendChannelMessage(channelId, "now playing: " + next.getTitle());
             playbackService.play(client, next, () -> onTrackFinished(client, next));
 
         } catch (Exception e) {
             log.error("Failed handling automatic next-track transition", e);
         }
+    }
+
+    private void triggerAutoDj(LocalTeamspeakClientSocket client, int channelId) {
+        Thread autoDjThread = new Thread(() -> {
+            try {
+                client.sendChannelMessage(channelId, "AutoDJ: finding new songs...");
+
+                List<String> suggestions = autoDjService.suggestSongs();
+
+                if (suggestions.isEmpty()) {
+                    client.sendChannelMessage(channelId, "AutoDJ: no suggestions available, queue ended");
+                    return;
+                }
+
+                boolean startedPlayback = false;
+                int added = 0;
+
+                for (String suggestion : suggestions) {
+                    if (!autoDjService.isEnabled()) {
+                        log.info("AutoDJ: disabled during fill, stopping");
+                        break;
+                    }
+
+                    try {
+                        ResolvedTrack resolved = mediaResolverService.resolve(suggestion);
+
+                        // Double-check resolved title against play history
+                        List<String> history = autoDjService.getPlayHistory();
+                        boolean recentlyPlayed = history.stream()
+                                .anyMatch(h -> AutoDjService.titlesMatch(h, resolved.getTitle()));
+
+                        if (recentlyPlayed) {
+                            log.info("AutoDJ: skipping '{}' (matches recently played)", resolved.getTitle());
+                            continue;
+                        }
+
+                        Track track = new Track(
+                                suggestion,
+                                "AutoDJ",
+                                resolved.getTitle(),
+                                resolved.getWebpageUrl(),
+                                resolved.getStreamUrl()
+                        );
+
+                        boolean wasIdle = queueService.isIdle();
+                        queueService.add(track);
+                        added++;
+
+                        if (wasIdle && !startedPlayback) {
+                            startedPlayback = true;
+                            autoDjService.recordPlay(track.getTitle());
+                            client.sendChannelMessage(channelId, "AutoDJ now playing: " + track.getTitle());
+                            playbackService.play(client, track, () -> onTrackFinished(client, track));
+                        }
+
+                    } catch (Exception e) {
+                        log.warn("AutoDJ: failed to resolve '{}'", suggestion, e);
+                    }
+                }
+
+                if (added > 1) {
+                    client.sendChannelMessage(channelId, "AutoDJ: queued " + (added - 1) + " more songs");
+                } else if (added == 0) {
+                    client.sendChannelMessage(channelId, "AutoDJ: could not resolve any songs, queue ended");
+                }
+
+            } catch (Exception e) {
+                log.error("AutoDJ fill failed", e);
+                try {
+                    client.sendChannelMessage(channelId, "AutoDJ: error - " + e.getMessage());
+                } catch (Exception ignored) {
+                }
+            }
+        }, "autodj-fill");
+
+        autoDjThread.setDaemon(true);
+        autoDjThread.start();
     }
 }
