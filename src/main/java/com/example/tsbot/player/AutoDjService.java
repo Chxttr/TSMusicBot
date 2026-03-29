@@ -105,8 +105,7 @@ public class AutoDjService {
         sb.append("- Choose songs that are popular enough to be found on YouTube\n");
         sb.append("Recently played songs (most recent first):\n");
 
-        int limit = Math.min(history.size(), 15);
-        for (int i = 0; i < limit; i++) {
+        for (int i = 0; i < history.size(); i++) {
             sb.append(i + 1).append(". ").append(history.get(i)).append("\n");
         }
 

@@ -8,7 +8,7 @@ public class AutoDjProperties {
     private boolean enabled = true;
     private String ollamaUrl = "http://localhost:30068";
     private String model = "llama3";
-    private int suggestCount = 10;
+    private int suggestCount = 7;
 
     public boolean isEnabled() {
         return enabled;
