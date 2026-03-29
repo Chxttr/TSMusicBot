@@ -39,7 +39,7 @@ public class PersistedTrack {
 
     /** Restores a {@link Track} with a {@code null} streamUrl — re-resolve before playing. */
     public Track toTrack() {
-        return new Track(query, requestedBy, title, webpageUrl, null);
+        return new Track(query, requestedBy, title, webpageUrl, null, -1);
     }
 
     public String getQuery()       { return query; }

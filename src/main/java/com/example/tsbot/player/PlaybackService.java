@@ -14,6 +14,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 public class PlaybackService {
@@ -35,6 +36,8 @@ public class PlaybackService {
 
     private volatile boolean stopRequested = false;
     private volatile boolean paused = false;
+    private final AtomicLong frameCount = new AtomicLong(0);
+    private volatile int trackDurationSeconds = -1;
 
     public PlaybackService(Ts3OpusMicrophone microphone) {
         this.microphone = microphone;
@@ -58,6 +61,8 @@ public class PlaybackService {
             command.add("5");
             command.add("-i");
             command.add(track.getStreamUrl());
+            command.add("-af");
+            command.add("loudnorm=I=-16:TP=-1.5:LRA=11");
             command.add("-f");
             command.add("s16le");
             command.add("-acodec");
@@ -74,6 +79,9 @@ public class PlaybackService {
             Process process = pb.start();
 
             stopRequested = false;
+            paused = false;
+            frameCount.set(0);
+            trackDurationSeconds = track.getDurationSeconds();
             microphone.clear();
 
             startErrorReader(process);
@@ -123,9 +131,22 @@ public class PlaybackService {
         return paused;
     }
 
+    /** Returns the current playback position in whole seconds. */
+    public long getPositionSeconds() {
+        // Each frame is FRAME_SIZE samples at SAMPLE_RATE Hz = 20ms per frame
+        return frameCount.get() * FRAME_SIZE / SAMPLE_RATE;
+    }
+
+    /** Returns the total duration of the current track in seconds, or -1 if unknown. */
+    public int getTrackDurationSeconds() {
+        return trackDurationSeconds;
+    }
+
     public synchronized void stop() {
         stopRequested = true;
         paused = false;
+        frameCount.set(0);
+        trackDurationSeconds = -1;
         microphone.clear();
 
         if (currentSession != null) {
@@ -194,6 +215,7 @@ public class PlaybackService {
                         byte[] packet = new byte[encoded];
                         System.arraycopy(opusBuffer, 0, packet, 0, encoded);
                         microphone.offerPacket(packet);
+                        frameCount.incrementAndGet();
                     }
                 }
             } catch (EOFException eof) {

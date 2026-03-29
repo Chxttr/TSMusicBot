@@ -34,6 +34,8 @@ public class MediaResolverService {
         command.add("url");
         command.add("--print");
         command.add("webpage_url");
+        command.add("--print");
+        command.add("duration");
         command.add(input);
 
         ProcessBuilder pb = new ProcessBuilder(command);
@@ -78,10 +80,20 @@ public class MediaResolverService {
         String title = parsedLines.get(0);
         String streamUrl = parsedLines.get(1);
         String webpageUrl = parsedLines.get(2);
+        int durationSeconds = parsedLines.size() >= 4 ? parseDuration(parsedLines.get(3)) : -1;
 
-        log.info("Resolved track: title='{}', webpageUrl='{}'", title, webpageUrl);
+        log.info("Resolved track: title='{}', webpageUrl='{}', duration={}s", title, webpageUrl, durationSeconds);
 
-        return new ResolvedTrack(query, title, webpageUrl, streamUrl);
+        return new ResolvedTrack(query, title, webpageUrl, streamUrl, durationSeconds);
+    }
+
+    private static int parseDuration(String raw) {
+        try {
+            double d = Double.parseDouble(raw);
+            return d > 0 ? (int) d : -1;
+        } catch (NumberFormatException e) {
+            return -1; // "NA" for live streams
+        }
     }
 
     private String normalizeQuery(String query) {
