@@ -54,6 +54,12 @@ public class HistoryService {
         return history.get(ThreadLocalRandom.current().nextInt(history.size()));
     }
 
+    /** Returns the most-recently-played {@code count} entries (capped to actual size). */
+    public synchronized List<PersistedTrack> getHistory(int count) {
+        int limit = Math.min(count, history.size());
+        return new ArrayList<>(history.subList(0, limit));
+    }
+
     public synchronized int size() {
         return history.size();
     }

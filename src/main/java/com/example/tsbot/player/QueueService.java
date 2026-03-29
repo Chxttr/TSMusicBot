@@ -8,8 +8,11 @@ import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
 
 @Service
 public class QueueService {
@@ -85,6 +88,29 @@ public class QueueService {
     public synchronized void clearQueue() {
         queue.clear();
         persist();
+    }
+
+    /** Removes the track at the given 1-based position in the upcoming queue. */
+    public synchronized Optional<Track> removeAt(int oneBasedIndex) {
+        if (oneBasedIndex < 1 || oneBasedIndex > queue.size()) return Optional.empty();
+        Track removed = queue.remove(oneBasedIndex - 1);
+        persist();
+        return Optional.of(removed);
+    }
+
+    /** Removes the first upcoming track whose title contains {@code fragment} (case-insensitive). */
+    public synchronized Optional<Track> removeByTitle(String fragment) {
+        String lower = fragment.toLowerCase(Locale.ROOT);
+        Iterator<Track> it = queue.iterator();
+        while (it.hasNext()) {
+            Track t = it.next();
+            if (t.getTitle().toLowerCase(Locale.ROOT).contains(lower)) {
+                it.remove();
+                persist();
+                return Optional.of(t);
+            }
+        }
+        return Optional.empty();
     }
 
     /** Stops all playback — clears both the queue and now-playing state. */

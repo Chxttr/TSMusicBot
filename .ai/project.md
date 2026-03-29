@@ -1,5 +1,7 @@
 # TSMusicBot — Project Context
 
+> **Private project** — personal use on a private TeamSpeak server. Not intended for public distribution.
+
 ## What This Is
 
 A **TeamSpeak 3 music bot** written in Java 21 / Spring Boot 3.3.5. It connects to a TS3 server as a regular client, joins a configured channel, listens for text message commands, resolves audio via `yt-dlp`, decodes it via `ffmpeg`, encodes it to Opus via `Concentus`, and streams it through the `ts3j` microphone API.
@@ -26,23 +28,26 @@ A **TeamSpeak 3 music bot** written in Java 21 / Spring Boot 3.3.5. It connects 
 ```
 com.example.tsbot
 ├── TsBotApplication.java          — Spring Boot entry point
-├── HealthController.java          — GET /api/health (status check only)
+├── HealthController.java          — GET /api/health
 ├── config/
 │   └── Ts3Properties.java         — @ConfigurationProperties(prefix="ts3")
 ├── ts3/
 │   ├── Ts3ClientService.java      — TS3 connection lifecycle (@PostConstruct)
 │   └── Ts3EventListener.java      — TS3Listener: switch-based command dispatch
-└── player/
-    ├── PlayerCoordinatorService.java — Orchestrates play/skip/stop/queue/history
-    ├── QueueService.java             — Persistent track queue (JSON, /app/data/queue.json)
-    ├── HistoryService.java           — Persistent play history, max 100, deduped by webpageUrl
-    ├── PlaybackService.java          — ffmpeg subprocess + Opus pump threads
-    ├── MediaResolverService.java     — yt-dlp subprocess, URL normalization
-    ├── Ts3OpusMicrophone.java        — Implements ts3j Microphone interface
-    ├── PlaybackSession.java          — Holds ffmpeg Process + stream reference
-    ├── Track.java                    — Queued/playing track (query, title, urls, requestedBy)
-    ├── ResolvedTrack.java            — yt-dlp resolution result (title, streamUrl, webpageUrl)
-    └── PersistedTrack.java           — JSON-serialisable snapshot (no streamUrl); used by queue & history
+├── player/
+│   ├── PlayerCoordinatorService.java — Orchestrates all commands; null-safe TS3 client
+│   ├── QueueService.java             — Persistent queue (JSON); add/addNext/removeAt/removeByTitle
+│   ├── HistoryService.java           — Persistent history, max 100 deduped by webpageUrl
+│   ├── PlaybackService.java          — ffmpeg subprocess + Opus pump; pause/resume support
+│   ├── MediaResolverService.java     — yt-dlp subprocess, URL normalisation
+│   ├── Ts3OpusMicrophone.java        — Implements ts3j Microphone interface
+│   ├── PlaybackSession.java          — Holds ffmpeg Process + stream reference
+│   ├── Track.java                    — Queued/playing track (query, title, urls, requestedBy)
+│   ├── ResolvedTrack.java            — yt-dlp resolution result (title, streamUrl, webpageUrl)
+│   ├── PersistedTrack.java           — JSON-serialisable snapshot (no streamUrl)
+│   └── TrackResolutionException.java — Unchecked; thrown when yt-dlp fails to resolve
+└── rest/
+    └── MusicController.java          — REST API mirroring all chat commands
 ```
 
 ---
@@ -78,14 +83,37 @@ ts3j streams Opus audio to TS3 server
 
 | Command | Alias | Behaviour |
 |---|---|---|
-| `!ping` | — | Replies "pong" |
-| `!play <query or URL>` | `!p` | Resolves and queues/plays a track |
+| `!play <query or URL>` | `!p` | Resolves and plays/queues a track |
 | `!next <query or URL>` | `!n` | Resolves and inserts track at the front of the queue |
+| `!skip` | `!s` | Skips the current track (or auto-plays from history) |
+| `!pause` | — | Pauses playback (pump thread sleeps, ffmpeg blocks naturally) |
+| `!resume` | — | Resumes paused playback |
 | `!queue` | `!q` | Shows now-playing + upcoming queue |
-| `!nowplaying` | `!np` | Shows current track + who requested it |
-| `!skip` | `!s` | Stops current track, plays next (or auto-plays from history) |
-| `!clear` | `!c` | Clears the upcoming queue (current track keeps playing) |
-| `!stop` | — | Stops playback and wipes the entire queue |
+| `!nowplaying` | `!np` | Shows current track + requester |
+| `!history [1-100]` | — | Shows last N played tracks (default 10) |
+| `!remove <pos or title>` | `!rm` | Removes track at 1-based position, or first title match |
+| `!clear` | `!c` | Clears upcoming queue (current track keeps playing) |
+| `!stop` | — | Stops playback and clears the entire queue |
+| `!help` | `!h` | Shows command reference |
+| `!ping` | — | Replies "pong" |
+
+## REST API (`/api/music`)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/status` | Playing/paused state + now-playing |
+| `GET` | `/queue` | Full queue state |
+| `GET` | `/nowplaying` | Current track (204 if idle) |
+| `GET` | `/history?limit=10` | Last N played tracks |
+| `POST` | `/play` | Body: `{ "query": "...", "requestedBy": "..." }` |
+| `POST` | `/next` | Same body — inserts at front of queue |
+| `POST` | `/skip` | Skip current track |
+| `POST` | `/pause` | Pause playback |
+| `POST` | `/resume` | Resume playback |
+| `POST` | `/stop` | Stop + clear queue |
+| `DELETE` | `/queue` | Clear upcoming queue |
+| `DELETE` | `/queue/{index}` | Remove by 1-based position |
+| `DELETE` | `/queue/search?title=...` | Remove first title match |
 
 ---
 
@@ -128,7 +156,7 @@ Port: `8080` (HTTP, Spring Boot)
 
 ### `PlaybackService` (thread model)
 Three daemon threads per active playback session:
-- **`ffmpeg-pcm-opus-pump`** — reads PCM from ffmpeg stdout, encodes with Concentus, enqueues Opus packets.
+- **`ffmpeg-pcm-opus-pump`** — reads PCM from ffmpeg stdout, encodes with Concentus, enqueues Opus packets. When `paused`, sleeps in 50ms ticks; ffmpeg blocks on the pipe naturally (back-pressure).
 - **`ffmpeg-stderr-reader`** — drains ffmpeg stderr to SLF4J info log.
 - **`ffmpeg-watcher`** — waits for ffmpeg exit; triggers `onFinished` callback for natural completion.
 
@@ -170,9 +198,8 @@ Audio parameters: 48kHz, stereo (2ch), 960-sample frames (20ms), CBR 48kbps, `OP
 
 1. **No reconnect / fault tolerance** — if the TS3 connection drops, the bot stays disconnected until restart.
 2. **Single server** — hardwired to one TS3 server; no multi-server support.
-3. **No REST control API** — only `/api/health`. All interaction is via TS3 chat.
-4. **No pause, resume, seek, or volume control** commands.
+3. **No REST authentication** — the `/api/music` endpoints are unauthenticated. Acceptable for a local/private deployment; add a token or IP restriction if exposed externally.
+4. **No seek** — no position tracking or seeking within a track.
 5. **Identity path is hardcoded** to `/app/data/bot_identity.dat` — local dev without Docker requires that path to exist.
-6. **`yt-dlp-ejs` dependency** — the `--remote-components ejs:github` flag requires Deno + the plugin to be on `PATH`; fails silently if missing.
-7. **Queue not auto-resumed on restart** — restored queue tracks sit in pending state until a user manually triggers playback (`!play` or `!next`).
-8. **No command authentication** — any user in the channel can issue `!stop`, `!clear`, etc.
+6. **`yt-dlp-ejs` dependency** — the `--remote-components ejs:github` flag requires Deno + the plugin to be on `PATH`.
+7. **Queue not auto-resumed on restart** — restored queue tracks sit pending until a user triggers playback.
