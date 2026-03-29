@@ -7,19 +7,23 @@ public class Track {
     private final String title;
     private final String webpageUrl;
     private final String streamUrl;
+    /** Duration in seconds, or -1 if unknown (live stream, etc.). */
+    private final int durationSeconds;
 
     public Track(
             String query,
             String requestedBy,
             String title,
             String webpageUrl,
-            String streamUrl
+            String streamUrl,
+            int durationSeconds
     ) {
         this.query = query;
         this.requestedBy = requestedBy;
         this.title = title;
         this.webpageUrl = webpageUrl;
         this.streamUrl = streamUrl;
+        this.durationSeconds = durationSeconds;
     }
 
     public String getQuery() {
@@ -40,5 +44,9 @@ public class Track {
 
     public String getStreamUrl() {
         return streamUrl;
+    }
+
+    public int getDurationSeconds() {
+        return durationSeconds;
     }
 }

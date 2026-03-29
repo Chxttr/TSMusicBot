@@ -74,13 +74,18 @@ public class PlayerCoordinatorService {
 
         StringBuilder response = new StringBuilder();
         response.append("▶ ").append(bold(nowPlaying))
+                .append(" ").append(formatProgress(playbackService.getPositionSeconds(), nowPlaying.getDurationSeconds()))
                 .append(" — *requested by ").append(nowPlaying.getRequestedBy()).append("*");
 
         List<Track> items = queueService.getQueue();
         if (!items.isEmpty()) {
             response.append("\n**Up next:**");
             for (int i = 0; i < items.size(); i++) {
-                response.append("\n").append(i + 1).append(". ").append(bold(items.get(i)));
+                Track t = items.get(i);
+                response.append("\n").append(i + 1).append(". ").append(bold(t));
+                if (t.getDurationSeconds() > 0) {
+                    response.append(" (").append(formatDuration(t.getDurationSeconds())).append(")");
+                }
             }
         }
 
@@ -93,7 +98,9 @@ public class PlayerCoordinatorService {
         if (nowPlaying == null) {
             chat(client, "*Nothing is currently playing.*");
         } else {
-            chat(client, "▶ " + bold(nowPlaying) + " — *requested by " + nowPlaying.getRequestedBy() + "*");
+            chat(client, "▶ " + bold(nowPlaying) + " "
+                    + formatProgress(playbackService.getPositionSeconds(), nowPlaying.getDurationSeconds())
+                    + " — *requested by " + nowPlaying.getRequestedBy() + "*");
         }
     }
 
@@ -280,12 +287,30 @@ public class PlayerCoordinatorService {
                 requestedBy,
                 resolved.getTitle(),
                 resolved.getWebpageUrl(),
-                resolved.getStreamUrl()
+                resolved.getStreamUrl(),
+                resolved.getDurationSeconds()
         );
     }
 
     private static String bold(Track track) {
         return "**" + track.getTitle() + "**";
+    }
+
+    /** Formats {@code [pos / total]} e.g. {@code [2:34 / 5:12]}. Omits total if unknown. */
+    private static String formatProgress(long positionSeconds, int durationSeconds) {
+        if (durationSeconds > 0) {
+            return "[" + formatDuration(positionSeconds) + " / " + formatDuration(durationSeconds) + "]";
+        }
+        return "[" + formatDuration(positionSeconds) + "]";
+    }
+
+    private static String formatDuration(long totalSeconds) {
+        long h = totalSeconds / 3600;
+        long m = (totalSeconds % 3600) / 60;
+        long s = totalSeconds % 60;
+        return h > 0
+                ? String.format("%d:%02d:%02d", h, m, s)
+                : String.format("%d:%02d", m, s);
     }
 
     /**
@@ -302,12 +327,6 @@ public class PlayerCoordinatorService {
         }
     }
 }
-
-
-// @Service
-// public class PlayerCoordinatorService {
-
-//     private static final Logger log = LoggerFactory.getLogger(PlayerCoordinatorService.class);
 
 //     private final QueueService queueService;
 //     private final PlaybackService playbackService;

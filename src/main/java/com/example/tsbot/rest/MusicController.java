@@ -19,9 +19,9 @@ public class MusicController {
 
     // --- DTOs ---
 
-    record TrackDto(String title, String requestedBy, String webpageUrl) {
+    record TrackDto(String title, String requestedBy, String webpageUrl, int durationSeconds) {
         static TrackDto of(Track t) {
-            return t == null ? null : new TrackDto(t.getTitle(), t.getRequestedBy(), t.getWebpageUrl());
+            return t == null ? null : new TrackDto(t.getTitle(), t.getRequestedBy(), t.getWebpageUrl(), t.getDurationSeconds());
         }
     }
 
@@ -33,7 +33,7 @@ public class MusicController {
 
     record QueueStateDto(TrackDto nowPlaying, List<TrackDto> upcoming) {}
 
-    record StatusDto(boolean playing, boolean paused, TrackDto nowPlaying) {}
+    record StatusDto(boolean playing, boolean paused, TrackDto nowPlaying, long positionSeconds, int durationSeconds) {}
 
     record PlayRequest(String query, String requestedBy) {}
 
@@ -64,7 +64,9 @@ public class MusicController {
         return new StatusDto(
                 playbackService.isPlaying(),
                 playbackService.isPaused(),
-                TrackDto.of(queueService.getNowPlaying())
+                TrackDto.of(queueService.getNowPlaying()),
+                playbackService.getPositionSeconds(),
+                playbackService.getTrackDurationSeconds()
         );
     }
 
