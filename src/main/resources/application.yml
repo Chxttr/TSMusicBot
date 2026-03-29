@@ -10,6 +10,6 @@ ts3:
 
 autodj:
   enabled: true
-  ollama-url: "http://192.168.128.10:30068"
+  ollama-url: "http://aiapi.chxttr.com"
   model: "llama3.1:8b"
-  suggest-count: 7
+  suggest-count: 10
