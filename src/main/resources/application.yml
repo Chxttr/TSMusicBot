@@ -2,7 +2,7 @@ server:
   port: 8080
 
 ts3:
-  host: "109.129.79.120"
+  host: "HIDDEN.IP"
   port: 9987
   nickname: "MusicTest"
   server-password: ""
